@@ -13,9 +13,14 @@ import com.bruce.reggie.service.DishService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.HashOperations;
+import org.springframework.data.redis.core.RedisOperations;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -36,6 +41,9 @@ public class DishController {
     @Autowired
     private CategoryService categoryService;
 
+    @Autowired
+    private RedisTemplate redisTemplate;
+
     /**
      * 添加菜品
      * 涉及两张表的插入操作: 1.菜品表dish 2.口味表dishflavor
@@ -48,6 +56,15 @@ public class DishController {
         log.info("添加菜品：{}",dishDto.toString());
         //菜品表insert操作
         dishService.saveWithFlavor(dishDto);
+
+        //清理所有菜品分类下的缓存数据
+        //Set keys = redisTemplate.keys("dish_*");
+        //redisTemplate.delete(keys);
+
+        //清理指定菜品分类下的缓存数据
+        String key = "dish_"+dishDto.getCategoryId()+"_1";
+        redisTemplate.delete(key);
+
         return Result.success("添加成功");
     }
 
@@ -130,6 +147,15 @@ public class DishController {
         log.info("修改菜品：{}",dishDto.toString());
         //菜品表insert操作
         dishService.updateWithFlavor(dishDto);
+
+        //清理所有菜品分类下的缓存数据
+        //Set keys = redisTemplate.keys("dish_*");
+        //redisTemplate.delete(keys);
+
+        //清理指定菜品分类下的缓存数据
+        String key = "dish_"+dishDto.getCategoryId()+"_1";
+        redisTemplate.delete(key);
+
         return Result.success("添加成功");
     }
 
@@ -145,6 +171,10 @@ public class DishController {
         //要删两张表：dish、dish_flavor，注意按外键约束需要先删口味表再删菜品表
 
         dishService.deleteWithFlavor(ids);
+
+        //清理所有菜品分类下的缓存数据
+        Set keys = redisTemplate.keys("dish_*");
+        redisTemplate.delete(keys);
 
         return Result.success("删除成功");
     }
@@ -193,7 +223,37 @@ public class DishController {
      */
     @GetMapping("/list")
     public Result<List<DishDto>> list(Dish dish) {
-        //1. 根据分类id获取对应分类下菜品对象集合
+
+        /*
+        1. 查缓存，缓存中有要的数据直接从缓存中取
+        2. 缓存中没有数据则查数据库，并将查询的结果(指定分类id下的菜品数据包括口味数据即list<DishDto>)添加到缓存中
+           以String类型进行缓存：key为dish_categoryId_status，value为对应categoryId下的list<DishDto>
+           注：缓存的形式也可以精确到菜品对象（以hash类型存放，key : key-value形式可以是categoryId_status：dishDto.getId()-dishDto），
+              上述只精确到某个菜品分类下的菜品集合（也足够），主要应用于移动端用户在主页切换菜品分类或套餐分类(高并发)能及时从缓存中取到对应分类下的菜品/套餐集合
+         */
+
+        String key = "dish_" + dish.getCategoryId() + "_" + dish.getStatus();
+
+        //查缓存中对应分类id是否存在
+        if (redisTemplate.hasKey(key)) {
+            //存在，返回缓存中的菜品数据
+            List<DishDto> dishDtoList = (List<DishDto>) redisTemplate.opsForValue().get(key);
+            return Result.success(dishDtoList);
+        }
+        //不存在，查询数据库，并将查询的对应分类下的菜品集合list添加到缓存中，设置缓存时间为60分钟
+        List<DishDto> dishDtoList = listQuery(dish);
+
+        redisTemplate.opsForValue().set(key,dishDtoList,60, TimeUnit.MINUTES);
+
+        return Result.success(dishDtoList);
+    }
+
+    /**
+     *从数据库中查询指定分类下的菜品数据及每个菜品对应的口味数据
+     * @param dish
+     * @return
+     */
+    public List<DishDto> listQuery(Dish dish) {
         LambdaQueryWrapper<Dish> lqw = new LambdaQueryWrapper<>();
         lqw.eq(dish.getCategoryId() != null, Dish::getCategoryId, dish.getCategoryId());
         lqw.eq(Dish::getStatus, 1);
@@ -221,7 +281,7 @@ public class DishController {
             return dishDto;
         }).collect(Collectors.toList());
 
-        return Result.success(listDishDto);
+        return listDishDto;
     }
 
 }

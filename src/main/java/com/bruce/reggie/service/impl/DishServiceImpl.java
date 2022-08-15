@@ -112,12 +112,12 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
             throw new CustomException("当前菜品属于启售状态，不能删除");
         }
 
-        //2. 删除套餐关联菜品数据：setmeal_dish
+        //2. 删除菜品关联口味数据：dish_flavor
         LambdaQueryWrapper<DishFlavor> lqw1 = new LambdaQueryWrapper<>();
         lqw1.in(DishFlavor::getDishId, ids);
         boolean remove = dishFlavorService.remove(lqw1);
 
-        //3. 删除套餐数据：setmeal
-        boolean b = this.removeByIds(ids);
+        //3. 删除菜品数据：dish
+       this.removeByIds(ids);
     }
 }
