@@ -232,8 +232,11 @@ public class DishController {
               上述只精确到某个菜品分类下的菜品集合（也足够），主要应用于移动端用户在主页切换菜品分类或套餐分类(高并发)能及时从缓存中取到对应分类下的菜品/套餐集合
          */
 
-        String key = "dish_" + dish.getCategoryId() + "_" + dish.getStatus();
-
+        String key = "dish_" + dish.getCategoryId() + "_1";
+        /*
+        后面1指status，获取list的话查询返回的都是在售状态，可以写死，避免在添加/修改套餐时也会执行该方法但
+         那里的请求调用不会传staus参数，故为null，这种情况下按程序逻辑也会添加缓存且key为”dish_categoryId_null“
+        */
         //查缓存中对应分类id是否存在
         if (redisTemplate.hasKey(key)) {
             //存在，返回缓存中的菜品数据
