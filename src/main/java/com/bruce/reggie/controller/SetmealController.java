@@ -12,6 +12,8 @@ import com.bruce.reggie.service.SetmealService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -38,6 +40,7 @@ public class SetmealController {
      * @param setmealDto
      * @return
      */
+    @CacheEvict(value = "setmealCache",allEntries = true)
     @PostMapping
     public Result<String> add(@RequestBody SetmealDto setmealDto) {
         //对两张表做插入操作：setmeal、setmeal_dish
@@ -101,6 +104,12 @@ public class SetmealController {
         return Result.success(setmealDto);
     }
 
+    /**
+     * 按条件修改指定套餐
+     * @param setmealDto
+     * @return
+     */
+    @CacheEvict(value = "setmealCache",allEntries = true)
     @PutMapping
     public Result<String> update(@RequestBody SetmealDto setmealDto) {
 
@@ -113,6 +122,7 @@ public class SetmealController {
      * @param ids
      * @return
      */
+    @CacheEvict(value = "setmealCache",allEntries = true)
     @DeleteMapping
     public Result<String> delete(@RequestParam List<Long> ids) {
         //删除套餐需要删除两张表：setmeal、setmeal_dish，且后者按照外键约束规则应先删
@@ -160,6 +170,7 @@ public class SetmealController {
      * @param setmeal
      * @return
      */
+    @Cacheable(value = "setmealCache",key = "#setmeal.categoryId+'_'+#setmeal.status")
     @GetMapping("/list")
     public Result<List<Setmeal>> list(Setmeal setmeal) {
         LambdaQueryWrapper<Setmeal> lqw = new LambdaQueryWrapper<>();
